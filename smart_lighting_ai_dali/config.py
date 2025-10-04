@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     app_name: str = Field("smart-lighting-ai-dali")
     db_url: str = Field("sqlite:///./smart_lighting.db")
     openai_api_key: str | None = Field(default=None)
+    openai_model: str = Field("gpt-4o-mini")
+    openai_enable_reasoning: bool = Field(False)
+    admin_token: str | None = Field(default=None)
     weather_api_key: str | None = Field(default=None)
     fernet_key: str = Field(...)
 

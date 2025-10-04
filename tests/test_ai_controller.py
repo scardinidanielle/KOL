@@ -68,3 +68,42 @@ def test_openai_response_is_clamped(monkeypatch):
     result, _ = controller.compute_setpoint(features)
     assert result["intensity_0_100"] <= 100
     assert result["cct_1800_6500"] <= 6500
+
+
+def test_openai_model_and_reasoning_usage():
+    from smart_lighting_ai_dali.config import get_settings
+
+    base_settings = get_settings()
+    custom_settings = base_settings.model_copy(
+        update={
+            "openai_model": "gpt-custom-model",
+            "openai_enable_reasoning": False,
+        }
+    )
+
+    class FakeClient:
+        def __init__(self):
+            self.responses = self
+            self.last_kwargs: dict[str, object] | None = None
+
+        def create(self, **kwargs):  # noqa: ANN003
+            self.last_kwargs = kwargs
+
+            class _Response:
+                output_text = json.dumps(
+                    {
+                        "intensity_0_100": 50,
+                        "cct_1800_6500": 3500,
+                        "reason": "test",
+                    }
+                )
+
+            return _Response()
+
+    fake_client = FakeClient()
+    controller = AIController(settings=custom_settings, client=fake_client)
+    controller._call_openai({"windows": []})
+
+    assert fake_client.last_kwargs is not None
+    assert fake_client.last_kwargs["model"] == "gpt-custom-model"
+    assert "reasoning" not in fake_client.last_kwargs

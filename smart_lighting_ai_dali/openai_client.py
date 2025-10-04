@@ -31,11 +31,7 @@ class AIController:
     def __init__(self, settings=None, client: OpenAI | None = None) -> None:
         self.settings = settings or get_settings()
         self.client = client
-        if (
-            self.client is None
-            and self.settings.openai_api_key
-            and OpenAI is not None
-        ):
+        if self.client is None and self.settings.openai_api_key and OpenAI is not None:
             self.client = OpenAI(api_key=self.settings.openai_api_key)
 
     def _build_payload(self, features: Iterable[FeatureWindow]) -> dict[str, Any]:
@@ -53,11 +49,10 @@ class AIController:
     def _call_openai(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not self.client:
             raise OpenAIError("OpenAI client not configured")
-        response = self.client.responses.create(
-            model="gpt-4.1-mini",
-            temperature=0.2,
-            reasoning={"effort": "medium"},
-            input=[
+        request_args: dict[str, Any] = {
+            "model": self.settings.openai_model,
+            "temperature": 0.2,
+            "input": [
                 {
                     "role": "system",
                     "content": (
@@ -70,7 +65,7 @@ class AIController:
                     "content": json.dumps(payload),
                 },
             ],
-            response_format={
+            "response_format": {
                 "type": "json_schema",
                 "json_schema": {
                     "name": "lighting_setpoint",
@@ -97,7 +92,10 @@ class AIController:
                     },
                 },
             },
-        )
+        }
+        if self.settings.openai_enable_reasoning:
+            request_args["reasoning"] = {"effort": "medium"}
+        response = self.client.responses.create(**request_args)
         text_payload: str | None = None
 
         if hasattr(response, "output_text"):
@@ -122,7 +120,9 @@ class AIController:
                             if isinstance(text_block, str):
                                 text_payload = text_block or None
                             elif text_block is not None:
-                                text_payload = getattr(text_block, "value", None) or None
+                                text_payload = (
+                                    getattr(text_block, "value", None) or None
+                                )
 
         if not text_payload:
             raise OpenAIError("Invalid response")
@@ -168,7 +168,9 @@ class AIController:
             "reason": reason,
         }
 
-    def compute_setpoint(self, features: List[FeatureWindow]) -> tuple[dict[str, Any], int]:
+    def compute_setpoint(
+        self, features: List[FeatureWindow]
+    ) -> tuple[dict[str, Any], int]:
         payload = self._build_payload(features)
         payload_json = json.dumps(payload)
         payload_size = len(payload_json.encode("utf-8"))
@@ -181,10 +183,18 @@ class AIController:
                 result["cct_1800_6500"] = clamp_cct(result["cct_1800_6500"])
                 return result, payload_size
             except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "OpenAI call failed, retrying",
-                    extra={"error": str(exc), "attempt": attempts},
-                )
+                if attempts == 1:
+                    logger.error(
+                        "OpenAI call failed (%s): %s",
+                        exc.__class__.__name__,
+                        exc,
+                        extra={"attempt": attempts},
+                    )
+                else:
+                    logger.warning(
+                        "OpenAI call failed, retrying",
+                        extra={"error": str(exc), "attempt": attempts},
+                    )
                 time.sleep(0.5 * attempts)
         logger.error("Falling back to rules controller")
         return self.fallback(features), payload_size
