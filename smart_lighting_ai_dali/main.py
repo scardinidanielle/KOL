@@ -33,10 +33,16 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
+_LOGGING_CONFIGURED = False
+
 
 def create_app(settings: Optional[Settings] = None, *, use_mock_dali: bool = True) -> FastAPI:
+    global _LOGGING_CONFIGURED
+
     settings = settings or get_settings()
-    configure_logging()
+    if not _LOGGING_CONFIGURED:
+        configure_logging()
+        _LOGGING_CONFIGURED = True
     Base.metadata.create_all(bind=engine)
     dali = MockDALIInterface() if use_mock_dali else TridonicUSBInterface()
     control_service = ControlService(dali=dali, settings=settings)
@@ -49,6 +55,7 @@ def create_app(settings: Optional[Settings] = None, *, use_mock_dali: bool = Tru
     app.state.control_service = control_service
     app.state.ai_controller = ai_controller
     app.state.rate_limiter = rate_limiter
+    app.state.logging_configured = True
 
     def feature_job() -> None:
         with engine.begin() as connection:
@@ -122,7 +129,13 @@ def create_app(settings: Optional[Settings] = None, *, use_mock_dali: bool = Tru
             FeatureWindow(payload=window, timestamp=datetime.utcnow().isoformat())
             for window in windows
         ]
-        setpoint, payload_size = ai_controller.compute_setpoint(feature_windows)
+        try:
+            setpoint, payload_size = ai_controller.compute_setpoint(feature_windows)
+        except ValueError as exc:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": str(exc)},
+            )
         feature_row = (
             db.query(FeatureRow)
             .order_by(FeatureRow.created_at.desc())

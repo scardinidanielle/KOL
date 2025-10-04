@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 from smart_lighting_ai_dali.control_service import ControlService
 from smart_lighting_ai_dali.dali import MockDALIInterface, dt8_warm_cool_to_bytes
 from smart_lighting_ai_dali.models import ManualOverride
+from smart_lighting_ai_dali.retention import prune_old_data
 
 
 def test_dt8_mapping():
@@ -70,3 +73,20 @@ def test_anti_flicker_limits(db_session):
         * service.settings.min_update_interval_seconds
     )
     assert abs(second.intensity - first.intensity) <= max_delta
+
+
+def test_prune_old_data_removes_expired_override(db_session):
+    expired_override = ManualOverride(
+        created_at=datetime.utcnow() - timedelta(hours=1),
+        expires_at=datetime.utcnow() - timedelta(minutes=5),
+        intensity=42,
+        cct=3500,
+        reason="expired",
+    )
+    db_session.add(expired_override)
+    db_session.commit()
+
+    counts = prune_old_data(db_session)
+
+    assert counts["overrides"] == 1
+    assert db_session.query(ManualOverride).count() == 0

@@ -58,9 +58,11 @@ def prune_old_data(session: Session) -> dict[str, int]:
         .filter(WeatherEvent.created_at < feature_threshold)
         .delete()
     )
+    override_grace = timedelta(seconds=settings.retention_override_grace_seconds)
+    override_threshold = now - override_grace
     counts["overrides"] = (
         session.query(ManualOverride)
-        .filter(ManualOverride.expires_at < raw_threshold)
+        .filter(ManualOverride.expires_at < override_threshold)
         .delete()
     )
     session.commit()

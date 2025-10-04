@@ -4,6 +4,9 @@ import json
 import logging
 
 
+JSON_HANDLER_ATTR = "_smart_lighting_json_handler"
+
+
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:  # noqa: D401
         data = {
@@ -21,10 +24,16 @@ class JsonFormatter(logging.Formatter):
 
 
 def configure_logging() -> None:
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
     root.setLevel(logging.INFO)
+
+    for handler in root.handlers:
+        if getattr(handler, JSON_HANDLER_ATTR, False):
+            return
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+    setattr(handler, JSON_HANDLER_ATTR, True)
     root.addHandler(handler)
 
 
