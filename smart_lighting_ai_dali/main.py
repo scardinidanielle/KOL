@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
 
@@ -50,13 +51,6 @@ def create_app(settings: Optional[Settings] = None, *, use_mock_dali: bool = Tru
     rate_limiter = InMemoryRateLimiter()
     scheduler = BackgroundScheduler()
 
-    app = FastAPI(title=settings.app_name)
-    app.state.scheduler = scheduler
-    app.state.control_service = control_service
-    app.state.ai_controller = ai_controller
-    app.state.rate_limiter = rate_limiter
-    app.state.logging_configured = True
-
     def feature_job() -> None:
         with engine.begin() as connection:
             session = Session(bind=connection)
@@ -73,20 +67,37 @@ def create_app(settings: Optional[Settings] = None, *, use_mock_dali: bool = Tru
             finally:
                 session.close()
 
-    if not scheduler.running:
-        scheduler.add_job(
-            feature_job,
-            "interval",
-            minutes=settings.feature_window_minutes,
-            id="feature_job",
-        )
-        scheduler.add_job(
-            retention_job,
-            "cron",
-            hour=0,
-            id="retention_job",
-        )
-        scheduler.start()
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if not scheduler.running:
+            scheduler.add_job(
+                feature_job,
+                "interval",
+                minutes=settings.feature_window_minutes,
+                id="feature_job",
+            )
+            scheduler.add_job(
+                retention_job,
+                "cron",
+                hour=0,
+                id="retention_job",
+            )
+            scheduler.start()
+
+        try:
+            yield
+        finally:
+            try:
+                scheduler.shutdown(wait=False)
+            except Exception:  # noqa: BLE001
+                pass
+
+    app = FastAPI(title=settings.app_name, lifespan=lifespan)
+    app.state.scheduler = scheduler
+    app.state.control_service = control_service
+    app.state.ai_controller = ai_controller
+    app.state.rate_limiter = rate_limiter
+    app.state.logging_configured = True
 
     @app.middleware("http")
     async def rate_limit_middleware(request: Request, call_next):  # noqa: ANN001
@@ -222,13 +233,6 @@ def create_app(settings: Optional[Settings] = None, *, use_mock_dali: bool = Tru
             dali=dali_status,
             scheduler=scheduler_status,
         )
-
-    @app.on_event("shutdown")
-    def shutdown_event() -> None:
-        try:
-            scheduler.shutdown(wait=False)
-        except Exception:  # noqa: BLE001
-            pass
 
     return app
 
