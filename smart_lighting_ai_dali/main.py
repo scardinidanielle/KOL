@@ -6,8 +6,9 @@ from datetime import datetime
 from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .config import Settings, get_settings
@@ -148,7 +149,9 @@ def create_app(
     def predict(request: PredictRequest, db: Session = Depends(get_db)):
         windows = prepare_feature_windows(db, rows=request.window_rows)
         if not windows:
-            return JSONResponse(status_code=400, content={"detail": "No features available"})
+            return JSONResponse(
+                status_code=400, content={"detail": "No features available"}
+            )
         feature_windows = [
             FeatureWindow(payload=window, timestamp=datetime.utcnow().isoformat())
             for window in windows
@@ -161,9 +164,7 @@ def create_app(
                 content={"detail": str(exc)},
             )
         feature_row = (
-            db.query(FeatureRow)
-            .order_by(FeatureRow.created_at.desc())
-            .first()
+            db.query(FeatureRow).order_by(FeatureRow.created_at.desc()).first()
         )
         decision = Decision(
             intensity=setpoint["intensity_0_100"],
@@ -185,9 +186,7 @@ def create_app(
     @app.post("/control", response_model=ControlResponse)
     def control(payload: ControlRequest, db: Session = Depends(get_db)):
         feature_row = (
-            db.query(FeatureRow)
-            .order_by(FeatureRow.created_at.desc())
-            .first()
+            db.query(FeatureRow).order_by(FeatureRow.created_at.desc()).first()
         )
         decision = control_service.apply(
             db,
@@ -231,9 +230,10 @@ def create_app(
         )
 
     @app.get("/healthz", response_model=HealthStatus)
-    def healthz(db: Session = Depends(get_db)):
+    def healthz():
         try:
-            db.execute("SELECT 1")
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
             db_status = "ok"
         except Exception as exc:  # noqa: BLE001
             logger.error("Database health check failed", extra={"error": str(exc)})
@@ -246,6 +246,20 @@ def create_app(
             dali=dali_status,
             scheduler=scheduler_status,
         )
+
+    @app.post("/admin/aggregate-now")
+    def aggregate_now(request: Request, db: Session = Depends(get_db)):
+        admin_token = settings.admin_token
+        auth_header = request.headers.get("Authorization")
+        if (
+            not admin_token
+            or auth_header is None
+            or auth_header.strip() != f"Bearer {admin_token}"
+        ):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        feature_row = aggregate_features(db, settings.feature_window_minutes)
+        created_count = 1 if feature_row else 0
+        return {"created_features": created_count}
 
     return app
 

@@ -16,6 +16,7 @@ temp_dir = Path(tempfile.mkdtemp())
 os.environ.setdefault("FERNET_KEY", TEST_FERNET_KEY)
 os.environ.setdefault("DB_URL", f"sqlite:///{temp_dir / 'test.db'}")
 os.environ.setdefault("USE_MOCK_DALI", "true")
+os.environ.setdefault("ADMIN_TOKEN", "test-token")
 BASE_DIR = Path(__file__).resolve().parents[1]
 
 from smart_lighting_ai_dali import config  # noqa: E402
@@ -57,11 +58,7 @@ def session() -> Generator:
 def app(session):  # noqa: ANN001
     app = create_app(settings=settings, use_mock_dali=True)
     personal_path = (
-        BASE_DIR
-        / "smart_lighting_ai_dali"
-        / "data"
-        / "examples"
-        / "personal.json"
+        BASE_DIR / "smart_lighting_ai_dali" / "data" / "examples" / "personal.json"
     )
     with open(personal_path, "r", encoding="utf-8") as handle:
         blob = json.load(handle)
