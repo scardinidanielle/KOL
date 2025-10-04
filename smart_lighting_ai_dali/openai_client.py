@@ -33,6 +33,20 @@ class AIController:
         self.client = client
         if self.client is None and self.settings.openai_api_key and OpenAI is not None:
             self.client = OpenAI(api_key=self.settings.openai_api_key)
+        self._ensure_chat_adapter()
+
+    def _ensure_chat_adapter(self) -> None:
+        if not self.client:
+            return
+        chat = getattr(self.client, "chat", None)
+        if chat is not None and hasattr(chat, "completions"):
+            return
+        if hasattr(self.client, "responses"):
+            class _ChatWrapper:
+                def __init__(self, completions):
+                    self.completions = completions
+
+            self.client.chat = _ChatWrapper(self.client.responses)  # type: ignore[attr-defined]
 
     def _build_payload(self, features: Iterable[FeatureWindow]) -> dict[str, Any]:
         payload = {
@@ -49,57 +63,50 @@ class AIController:
     def _call_openai(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not self.client:
             raise OpenAIError("OpenAI client not configured")
-        request_args: dict[str, Any] = {
-            "model": self.settings.openai_model,
-            "temperature": 0.2,
-            "input": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a smart lighting controller optimizing comfort, "
-                        "accessibility, and energy efficiency."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": json.dumps(payload),
-                },
-            ],
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "lighting_setpoint",
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "intensity_0_100": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 100,
-                            },
-                            "cct_1800_6500": {
-                                "type": "integer",
-                                "minimum": 1800,
-                                "maximum": 6500,
-                            },
-                            "reason": {"type": "string"},
-                        },
-                        "required": [
-                            "intensity_0_100",
-                            "cct_1800_6500",
-                            "reason",
-                        ],
-                    },
-                },
+        self._ensure_chat_adapter()
+        chat_api = getattr(self.client, "chat", None)
+        completions_api = getattr(chat_api, "completions", None)
+        if completions_api is None or not hasattr(completions_api, "create"):
+            raise OpenAIError("OpenAI client does not support chat completions")
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a smart lighting controller optimizing comfort, "
+                    "accessibility, and energy efficiency. Reply with a single JSON "
+                    "object ONLY."
+                ),
             },
+            {"role": "user", "content": json.dumps(payload)},
+        ]
+        model = getattr(self.settings, "openai_model", None) or "gpt-4o-mini"
+        request_args: dict[str, Any] = {
+            "model": model,
+            "temperature": 0.2,
+            "messages": messages,
         }
+        response_format = {"type": "json_object"} if hasattr(completions_api, "create") else None
+        if response_format is not None:
+            request_args["response_format"] = response_format
         if self.settings.openai_enable_reasoning:
             request_args["reasoning"] = {"effort": "medium"}
-        response = self.client.responses.create(**request_args)
+
+        response = completions_api.create(**request_args)
         text_payload: str | None = None
 
-        if hasattr(response, "output_text"):
-            text_payload = getattr(response, "output_text") or None
+        if hasattr(response, "choices"):
+            choices = getattr(response, "choices", None) or []
+            if choices:
+                first_choice = choices[0]
+                message = getattr(first_choice, "message", None)
+                if message is not None:
+                    text_payload = (getattr(message, "content", "") or "").strip()
+
+        if not text_payload and hasattr(response, "output_text"):
+            candidate = getattr(response, "output_text")
+            if isinstance(candidate, str):
+                text_payload = candidate.strip()
 
         if not text_payload:
             outputs = getattr(response, "output", None)
@@ -118,16 +125,38 @@ class AIController:
                         if first_item is not None:
                             text_block = getattr(first_item, "text", None)
                             if isinstance(text_block, str):
-                                text_payload = text_block or None
+                                text_payload = text_block.strip() or None
                             elif text_block is not None:
                                 text_payload = (
-                                    getattr(text_block, "value", None) or None
-                                )
+                                    (getattr(text_block, "value", "") or "").strip()
+                                ) or None
 
         if not text_payload:
             raise OpenAIError("Invalid response")
 
-        return json.loads(text_payload)
+        try:
+            data = json.loads(text_payload)
+        except json.JSONDecodeError as exc:
+            raise OpenAIError(f"Failed to decode JSON: {exc}") from exc
+
+        if not isinstance(data, dict):
+            raise OpenAIError("Response payload must be a JSON object")
+
+        try:
+            intensity = clamp_intensity(int(data["intensity_0_100"]))
+            cct = clamp_cct(int(data["cct_1800_6500"]))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise OpenAIError("Invalid numeric fields in response") from exc
+
+        reason = data.get("reason")
+        if not isinstance(reason, str):
+            raise OpenAIError("Reason must be a string")
+
+        return {
+            "intensity_0_100": intensity,
+            "cct_1800_6500": cct,
+            "reason": reason,
+        }
 
     def fallback(self, features: Iterable[FeatureWindow]) -> dict[str, Any]:
         windows = list(features)

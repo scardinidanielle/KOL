@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from statistics import mean
 from typing import List, Tuple
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
@@ -37,8 +37,14 @@ def _load_profile_features(session: Session, settings) -> dict[str, str | None]:
             "chronotype_enum": None,
         }
     fernet = Fernet(settings.fernet_key)
-    decrypted = fernet.decrypt(profile.encrypted_payload.encode("utf-8"))
-    data = json.loads(decrypted)
+    try:
+        decrypted = fernet.decrypt(profile.encrypted_payload.encode("utf-8"))
+        data = json.loads(decrypted)
+    except (InvalidToken, ValueError, json.JSONDecodeError) as exc:
+        logger.warning(
+            "Skipping invalid profile payload", extra={"error": str(exc)}
+        )
+        return {}
     age = data.get("age", 35)
     if age < 25:
         age_bucket = "18-24"
