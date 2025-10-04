@@ -36,6 +36,11 @@ class AIController:
         self._ensure_chat_adapter()
 
     def _ensure_chat_adapter(self) -> None:
+        """
+        Make sure we can call `client.chat.completions.create(...)` even if the SDK
+        only exposes `client.responses`. We attach a tiny shim to keep the rest of
+        the code stable across SDK variants.
+        """
         if not self.client:
             return
         chat = getattr(self.client, "chat", None)
@@ -45,13 +50,11 @@ class AIController:
             class _ChatWrapper:
                 def __init__(self, completions):
                     self.completions = completions
-
+            # Attach a shim so we can call client.chat.completions.create(...)
             self.client.chat = _ChatWrapper(self.client.responses)  # type: ignore[attr-defined]
 
     def _build_payload(self, features: Iterable[FeatureWindow]) -> dict[str, Any]:
-        payload = {
-            "windows": [fw.payload for fw in features],
-        }
+        payload = {"windows": [fw.payload for fw in features]}
         payload_json = json.dumps(payload)
         payload_size = len(payload_json.encode("utf-8"))
         if payload_size > self.settings.payload_cap_bytes:
@@ -64,6 +67,7 @@ class AIController:
         if not self.client:
             raise OpenAIError("OpenAI client not configured")
         self._ensure_chat_adapter()
+
         chat_api = getattr(self.client, "chat", None)
         completions_api = getattr(chat_api, "completions", None)
         if completions_api is None or not hasattr(completions_api, "create"):
@@ -75,34 +79,38 @@ class AIController:
                 "content": (
                     "You are a smart lighting controller optimizing comfort, "
                     "accessibility, and energy efficiency. Reply with a single JSON "
-                    "object ONLY."
+                    "object ONLY with keys: intensity_0_100 (int), cct_1800_6500 (int), reason (string)."
                 ),
             },
             {"role": "user", "content": json.dumps(payload)},
         ]
+
         model = getattr(self.settings, "openai_model", None) or "gpt-4o-mini"
         request_args: dict[str, Any] = {
             "model": model,
             "temperature": 0.2,
             "messages": messages,
         }
-        response_format = {"type": "json_object"} if hasattr(completions_api, "create") else None
-        if response_format is not None:
-            request_args["response_format"] = response_format
-        if self.settings.openai_enable_reasoning:
+
+        # Ask for strict JSON if supported (Chat Completions accepts {"type": "json_object"})
+        request_args["response_format"] = {"type": "json_object"}
+
+        # Optional reasoning flag (avoid AttributeError if not in Settings)
+        if getattr(self.settings, "openai_enable_reasoning", False):
             request_args["reasoning"] = {"effort": "medium"}
 
         response = completions_api.create(**request_args)
-        text_payload: str | None = None
 
+        # Try common shapes first (chat.completions)
+        text_payload: str | None = None
         if hasattr(response, "choices"):
             choices = getattr(response, "choices", None) or []
             if choices:
-                first_choice = choices[0]
-                message = getattr(first_choice, "message", None)
+                message = getattr(choices[0], "message", None)
                 if message is not None:
                     text_payload = (getattr(message, "content", "") or "").strip()
 
+        # Fallbacks for other SDK variants
         if not text_payload and hasattr(response, "output_text"):
             candidate = getattr(response, "output_text")
             if isinstance(candidate, str):
@@ -127,13 +135,12 @@ class AIController:
                             if isinstance(text_block, str):
                                 text_payload = text_block.strip() or None
                             elif text_block is not None:
-                                text_payload = (
-                                    (getattr(text_block, "value", "") or "").strip()
-                                ) or None
+                                text_payload = ((getattr(text_block, "value", "") or "").strip()) or None
 
         if not text_payload:
             raise OpenAIError("Invalid response")
 
+        # Parse JSON strictly
         try:
             data = json.loads(text_payload)
         except json.JSONDecodeError as exc:
@@ -142,15 +149,29 @@ class AIController:
         if not isinstance(data, dict):
             raise OpenAIError("Response payload must be a JSON object")
 
+        # Coerce numbers safely, clamp, and validate reason
+        def _to_int(name: str, v: Any) -> int:
+            if isinstance(v, bool):
+                raise OpenAIError(f"Invalid boolean for {name}")
+            if isinstance(v, (int, float)):
+                return int(v)
+            if isinstance(v, str):
+                try:
+                    return int(float(v.strip()))
+                except Exception as exc:  # noqa: BLE001
+                    raise OpenAIError("Invalid numeric fields in response") from exc
+            raise OpenAIError("Invalid numeric fields in response")
+
         try:
-            intensity = clamp_intensity(int(data["intensity_0_100"]))
-            cct = clamp_cct(int(data["cct_1800_6500"]))
-        except (KeyError, TypeError, ValueError) as exc:
+            intensity = clamp_intensity(_to_int("intensity_0_100", data["intensity_0_100"]))
+            cct = clamp_cct(_to_int("cct_1800_6500", data["cct_1800_6500"]))
+        except (KeyError, OpenAIError) as exc:
             raise OpenAIError("Invalid numeric fields in response") from exc
 
         reason = data.get("reason")
         if not isinstance(reason, str):
-            raise OpenAIError("Reason must be a string")
+            reason = str(reason)
+        reason = (reason or "AI decision")[:200]
 
         return {
             "intensity_0_100": intensity,
@@ -197,9 +218,7 @@ class AIController:
             "reason": reason,
         }
 
-    def compute_setpoint(
-        self, features: List[FeatureWindow]
-    ) -> tuple[dict[str, Any], int]:
+    def compute_setpoint(self, features: List[FeatureWindow]) -> tuple[dict[str, Any], int]:
         payload = self._build_payload(features)
         payload_json = json.dumps(payload)
         payload_size = len(payload_json.encode("utf-8"))
