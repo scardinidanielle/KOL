@@ -122,7 +122,13 @@ def create_app(settings: Optional[Settings] = None, *, use_mock_dali: bool = Tru
             FeatureWindow(payload=window, timestamp=datetime.utcnow().isoformat())
             for window in windows
         ]
-        setpoint, payload_size = ai_controller.compute_setpoint(feature_windows)
+        try:
+            setpoint, payload_size = ai_controller.compute_setpoint(feature_windows)
+        except ValueError as exc:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": str(exc)},
+            )
         feature_row = (
             db.query(FeatureRow)
             .order_by(FeatureRow.created_at.desc())
