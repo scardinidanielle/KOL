@@ -14,7 +14,19 @@ class FakeResponses:
     def create(self, **kwargs):  # noqa: ANN001, ANN003
         class _Response:
             def __init__(self, payload):
-                self.output = [[{"content": [{"text": json.dumps(payload)}]}]]
+                class _TextBlock:
+                    def __init__(self, value):
+                        self.value = value
+
+                class _ContentBlock:
+                    def __init__(self, value):
+                        self.text = _TextBlock(value)
+
+                class _OutputBlock:
+                    def __init__(self, value):
+                        self.content = [_ContentBlock(value)]
+
+                self.output = [_OutputBlock(json.dumps(payload))]
 
         return _Response(self.payload)
 
