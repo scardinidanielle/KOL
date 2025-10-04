@@ -98,10 +98,36 @@ class AIController:
                 },
             },
         )
-        if not response.output or not response.output[0].get("content"):
+        text_payload: str | None = None
+
+        if hasattr(response, "output_text"):
+            text_payload = getattr(response, "output_text") or None
+
+        if not text_payload:
+            outputs = getattr(response, "output", None)
+            if outputs:
+                try:
+                    first_output = outputs[0]
+                except IndexError:
+                    first_output = None
+                if first_output is not None:
+                    content_items = getattr(first_output, "content", None)
+                    if content_items:
+                        try:
+                            first_item = content_items[0]
+                        except IndexError:
+                            first_item = None
+                        if first_item is not None:
+                            text_block = getattr(first_item, "text", None)
+                            if isinstance(text_block, str):
+                                text_payload = text_block or None
+                            elif text_block is not None:
+                                text_payload = getattr(text_block, "value", None) or None
+
+        if not text_payload:
             raise OpenAIError("Invalid response")
-        content = response.output[0]["content"][0]["text"]
-        return json.loads(content)
+
+        return json.loads(text_payload)
 
     def fallback(self, features: Iterable[FeatureWindow]) -> dict[str, Any]:
         windows = list(features)
