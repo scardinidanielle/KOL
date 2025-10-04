@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import List
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,9 +20,15 @@ class Settings(BaseSettings):
     app_name: str = Field("smart-lighting-ai-dali")
     db_url: str = Field("sqlite:///./smart_lighting.db")
     openai_api_key: str | None = Field(default=None)
-    openai_model: str = Field("gpt-4o-mini")
+    openai_model: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("OPENAI_MODEL", "openai_model"),
+    )
     openai_enable_reasoning: bool = Field(False)
-    admin_token: str | None = Field(default=None)
+    admin_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ADMIN_TOKEN", "admin_token"),
+    )
     weather_api_key: str | None = Field(default=None)
     fernet_key: str = Field(...)
 

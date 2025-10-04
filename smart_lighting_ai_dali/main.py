@@ -112,11 +112,9 @@ def create_app(
     app.state.ai_controller = ai_controller
     app.state.rate_limiter = rate_limiter
     app.state.logging_configured = True
+    app.state.settings = settings
 
-    def require_admin_token(
-        authorization: str | None = Header(None),
-        settings: Settings = Depends(get_settings),
-    ) -> None:
+    def require_admin_token(authorization: str | None = Header(None)) -> None:
         if not settings.admin_token:
             raise HTTPException(status_code=503, detail="Admin token not configured")
         if not authorization or not authorization.startswith("Bearer "):
@@ -259,14 +257,8 @@ def create_app(
             scheduler=scheduler_status,
         )
 
-    @app.post(
-        "/admin/aggregate-now",
-        dependencies=[Depends(require_admin_token)],
-    )
-    def aggregate_now(
-        db: Session = Depends(get_db),
-        settings: Settings = Depends(get_settings),
-    ):
+    @app.post("/admin/aggregate-now", dependencies=[Depends(require_admin_token)])
+    def aggregate_now(db: Session = Depends(get_db)):
         aggregate_features(db, settings.feature_window_minutes)
         return {"ok": True}
 
