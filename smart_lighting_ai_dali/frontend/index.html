@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Lighting Local Console</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-slate-950 text-slate-100 min-h-screen">
+    <div class="max-w-6xl mx-auto px-4 py-8 space-y-10">
+      <header class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 class="text-3xl font-semibold">Smart Lighting Local Console</h1>
+          <p class="text-sm text-slate-300">
+            Interact with ingest, prediction, control, telemetry, and profile endpoints.
+          </p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <label for="adminToken" class="text-sm">Admin Token</label>
+          <input
+            id="adminToken"
+            type="password"
+            placeholder="Bearer token"
+            class="px-3 py-2 rounded bg-slate-800 border border-slate-700 text-sm w-48"
+          />
+        </div>
+      </header>
+
+      <section class="bg-slate-900/70 border border-slate-800 rounded-lg p-6 space-y-4">
+        <h2 class="text-xl font-semibold">Consent &amp; Profile</h2>
+        <form id="profileForm" class="grid gap-4 md:grid-cols-2">
+          <div class="space-y-2">
+            <label class="block text-sm font-medium" for="profileUserId">User ID</label>
+            <input
+              id="profileUserId"
+              required
+              class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700"
+              placeholder="eg. alice"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="block text-sm font-medium" for="profileConsent">Consent</label>
+            <select
+              id="profileConsent"
+              class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700"
+            >
+              <option value="true">Granted</option>
+              <option value="false">Denied</option>
+            </select>
+          </div>
+          <div class="space-y-2">
+            <label class="block text-sm font-medium" for="profileAge">Age</label>
+            <input
+              id="profileAge"
+              type="number"
+              min="0"
+              max="120"
+              class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700"
+              placeholder="38"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="block text-sm font-medium" for="profileSex">Sex</label>
+            <input
+              id="profileSex"
+              class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700"
+              placeholder="female"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="block text-sm font-medium" for="profileImpairment">Visual Impairment</label>
+            <input
+              id="profileImpairment"
+              class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700"
+              placeholder="none"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="block text-sm font-medium" for="profileChronotype">Chronotype</label>
+            <input
+              id="profileChronotype"
+              class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700"
+              placeholder="intermediate"
+            />
+          </div>
+          <div class="md:col-span-2 space-y-2">
+            <label class="block text-sm font-medium" for="profileSchedules">Schedules JSON</label>
+            <textarea
+              id="profileSchedules"
+              rows="3"
+              class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700"
+              placeholder='{"Monday": "work", "Saturday": "rest"}'
+            ></textarea>
+          </div>
+          <div class="md:col-span-2 space-y-2">
+            <label class="block text-sm font-medium" for="profilePreferences">Preferences JSON</label>
+            <textarea
+              id="profilePreferences"
+              rows="2"
+              class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700"
+              placeholder='{"brightness_preference": "soft"}'
+            ></textarea>
+          </div>
+          <div class="flex gap-2 md:col-span-2">
+            <button
+              type="submit"
+              class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-medium"
+            >
+              Save Profile
+            </button>
+            <button
+              id="loadProfile"
+              type="button"
+              class="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded font-medium"
+            >
+              Load Profile
+            </button>
+            <button
+              id="deleteProfile"
+              type="button"
+              class="px-4 py-2 bg-rose-600 hover:bg-rose-500 rounded font-medium"
+            >
+              Delete Profile
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="grid gap-6 md:grid-cols-2">
+        <div class="bg-slate-900/70 border border-slate-800 rounded-lg p-6 space-y-4">
+          <h2 class="text-xl font-semibold">Control</h2>
+          <div class="grid gap-4">
+            <div class="grid grid-cols-2 gap-4">
+              <label class="text-sm" for="controlIntensity">Intensity</label>
+              <input
+                id="controlIntensity"
+                type="number"
+                min="0"
+                max="100"
+                class="px-3 py-2 rounded bg-slate-800 border border-slate-700"
+                value="50"
+              />
+              <label class="text-sm" for="controlCct">CCT</label>
+              <input
+                id="controlCct"
+                type="number"
+                min="1800"
+                max="6500"
+                class="px-3 py-2 rounded bg-slate-800 border border-slate-700"
+                value="3500"
+              />
+            </div>
+            <input
+              id="controlReason"
+              class="px-3 py-2 rounded bg-slate-800 border border-slate-700"
+              placeholder="Reason"
+            />
+            <button
+              id="applyControl"
+              class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded font-medium"
+            >
+              Apply Control
+            </button>
+            <div>
+              <h3 class="text-sm font-semibold uppercase text-slate-400 mb-2">Quick Scenes</h3>
+              <div class="flex flex-wrap gap-2">
+                <button data-scene="focus" class="scene-btn px-3 py-2 rounded bg-slate-800 hover:bg-slate-700">
+                  Focus
+                </button>
+                <button data-scene="relax" class="scene-btn px-3 py-2 rounded bg-slate-800 hover:bg-slate-700">
+                  Relax
+                </button>
+                <button data-scene="night" class="scene-btn px-3 py-2 rounded bg-slate-800 hover:bg-slate-700">
+                  Night
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-slate-900/70 border border-slate-800 rounded-lg p-6 space-y-4">
+          <h2 class="text-xl font-semibold">Automation</h2>
+          <div class="grid gap-3">
+            <button id="predict" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded font-medium">
+              Predict
+            </button>
+            <button id="aggregate" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 rounded font-medium">
+              Aggregate Now
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid gap-6 md:grid-cols-2">
+        <div class="bg-slate-900/70 border border-slate-800 rounded-lg p-6 space-y-4">
+          <h2 class="text-xl font-semibold">Ingest</h2>
+          <form id="sensorForm" class="space-y-3">
+            <div class="grid grid-cols-2 gap-4 items-center">
+              <label class="text-sm" for="sensorLux">Ambient Lux</label>
+              <input
+                id="sensorLux"
+                type="number"
+                min="0"
+                max="1000"
+                class="px-3 py-2 rounded bg-slate-800 border border-slate-700"
+                value="300"
+              />
+              <label class="text-sm" for="sensorPresence">Presence</label>
+              <select id="sensorPresence" class="px-3 py-2 rounded bg-slate-800 border border-slate-700">
+                <option value="true">Present</option>
+                <option value="false">Absent</option>
+              </select>
+            </div>
+            <button class="w-full px-4 py-2 bg-lime-600 hover:bg-lime-500 rounded font-medium">
+              Ingest Sensor
+            </button>
+          </form>
+          <form id="weatherForm" class="space-y-3">
+            <div class="grid grid-cols-2 gap-4 items-center">
+              <label class="text-sm" for="weatherSummary">Summary</label>
+              <input
+                id="weatherSummary"
+                class="px-3 py-2 rounded bg-slate-800 border border-slate-700"
+                placeholder="clear"
+              />
+              <label class="text-sm" for="weatherTemp">Temperature °C</label>
+              <input
+                id="weatherTemp"
+                type="number"
+                class="px-3 py-2 rounded bg-slate-800 border border-slate-700"
+                value="21"
+              />
+            </div>
+            <button class="w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded font-medium">
+              Ingest Weather
+            </button>
+          </form>
+        </div>
+
+        <div class="bg-slate-900/70 border border-slate-800 rounded-lg p-6 space-y-4">
+          <h2 class="text-xl font-semibold">Monitoring</h2>
+          <div class="grid gap-3">
+            <button id="loadTelemetry" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded font-medium">
+              Load Telemetry
+            </button>
+            <button id="refreshHealth" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium">
+              Refresh Health
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="bg-slate-900/70 border border-slate-800 rounded-lg p-6">
+        <h2 class="text-xl font-semibold mb-4">Response</h2>
+        <pre id="output" class="bg-slate-950/70 border border-slate-800 rounded-lg p-4 text-sm overflow-auto max-h-80"></pre>
+      </section>
+    </div>
+
+    <script>
+      const output = document.getElementById("output");
+      const adminTokenInput = document.getElementById("adminToken");
+
+      function render(action, data) {
+        const timestamp = new Date().toISOString();
+        output.textContent = `${timestamp} — ${action}\n${JSON.stringify(data, null, 2)}`;
+      }
+
+      async function apiRequest(path, options = {}) {
+        const response = await fetch(path, options);
+        const text = await response.text();
+        let data;
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch (err) {
+          data = { raw: text };
+        }
+        if (!response.ok) {
+          throw { status: response.status, data };
+        }
+        return data;
+      }
+
+      document.getElementById("profileForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const userId = document.getElementById("profileUserId").value.trim();
+        const consent = document.getElementById("profileConsent").value === "true";
+        const ageValue = document.getElementById("profileAge").value;
+        const sex = document.getElementById("profileSex").value || null;
+        const impairment = document.getElementById("profileImpairment").value || null;
+        const chronotype = document.getElementById("profileChronotype").value || null;
+        let schedules = {};
+        let preferences = {};
+        const schedulesInput = document.getElementById("profileSchedules").value.trim();
+        const preferencesInput = document.getElementById("profilePreferences").value.trim();
+        if (schedulesInput) {
+          try {
+            schedules = JSON.parse(schedulesInput);
+          } catch (error) {
+            render("Invalid schedules JSON", { error: error.message });
+            return;
+          }
+        }
+        if (preferencesInput) {
+          try {
+            preferences = JSON.parse(preferencesInput);
+          } catch (error) {
+            render("Invalid preferences JSON", { error: error.message });
+            return;
+          }
+        }
+
+        const payload = {
+          user_id: userId,
+          consent,
+          age: ageValue ? Number(ageValue) : null,
+          sex,
+          visual_impairment: impairment,
+          chronotype,
+          schedules,
+          preferences,
+        };
+
+        try {
+          const result = await apiRequest("/profile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          render("Profile saved", result);
+        } catch (error) {
+          render("Failed to save profile", error);
+        }
+      });
+
+      document.getElementById("loadProfile").addEventListener("click", async () => {
+        const userId = document.getElementById("profileUserId").value.trim();
+        if (!userId) {
+          render("Load Profile", { error: "User ID required" });
+          return;
+        }
+        try {
+          const profile = await apiRequest(`/profile/${encodeURIComponent(userId)}`);
+          render("Profile loaded", profile);
+        } catch (error) {
+          render("Failed to load profile", error);
+        }
+      });
+
+      document.getElementById("deleteProfile").addEventListener("click", async () => {
+        const userId = document.getElementById("profileUserId").value.trim();
+        const token = adminTokenInput.value.trim();
+        if (!userId) {
+          render("Delete Profile", { error: "User ID required" });
+          return;
+        }
+        if (!token) {
+          render("Delete Profile", { error: "Admin token required" });
+          return;
+        }
+        try {
+          const result = await apiRequest(`/admin/profile/${encodeURIComponent(userId)}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          render("Profile deleted", result);
+        } catch (error) {
+          render("Failed to delete profile", error);
+        }
+      });
+
+      document.getElementById("applyControl").addEventListener("click", async () => {
+        const intensity = Number(document.getElementById("controlIntensity").value || 0);
+        const cct = Number(document.getElementById("controlCct").value || 2700);
+        const reason = document.getElementById("controlReason").value || "console";
+        try {
+          const result = await apiRequest("/control", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              intensity,
+              cct,
+              reason,
+              source: "console",
+            }),
+          });
+          render("Control applied", result);
+        } catch (error) {
+          render("Failed to apply control", error);
+        }
+      });
+
+      document.querySelectorAll(".scene-btn").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const scene = button.dataset.scene;
+          const scenes = {
+            focus: { intensity: 85, cct: 5000 },
+            relax: { intensity: 40, cct: 3200 },
+            night: { intensity: 15, cct: 2200 },
+          };
+          const preset = scenes[scene] || scenes.relax;
+          try {
+            const result = await apiRequest("/control", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                ...preset,
+                reason: `${scene} scene`,
+                source: "scene",
+              }),
+            });
+            render(`${scene} scene applied`, result);
+          } catch (error) {
+            render(`Failed to apply ${scene} scene`, error);
+          }
+        });
+      });
+
+      document.getElementById("predict").addEventListener("click", async () => {
+        try {
+          const result = await apiRequest("/predict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          render("Prediction", result);
+        } catch (error) {
+          render("Predict failed", error);
+        }
+      });
+
+      document.getElementById("aggregate").addEventListener("click", async () => {
+        const token = adminTokenInput.value.trim();
+        if (!token) {
+          render("Aggregate Now", { error: "Admin token required" });
+          return;
+        }
+        try {
+          const result = await apiRequest("/admin/aggregate-now", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          render("Aggregate triggered", result);
+        } catch (error) {
+          render("Aggregate failed", error);
+        }
+      });
+
+      document.getElementById("sensorForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const ambient_lux = Number(document.getElementById("sensorLux").value || 0);
+        const presence = document.getElementById("sensorPresence").value === "true";
+        try {
+          const result = await apiRequest("/ingest/sensor", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ambient_lux, presence }),
+          });
+          render("Sensor ingested", result);
+        } catch (error) {
+          render("Sensor ingest failed", error);
+        }
+      });
+
+      document.getElementById("weatherForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const weather_summary = document.getElementById("weatherSummary").value || "clear";
+        const temperature_c = Number(document.getElementById("weatherTemp").value || 0);
+        try {
+          const result = await apiRequest("/ingest/weather", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ weather_summary, temperature_c }),
+          });
+          render("Weather ingested", result);
+        } catch (error) {
+          render("Weather ingest failed", error);
+        }
+      });
+
+      document.getElementById("loadTelemetry").addEventListener("click", async () => {
+        try {
+          const result = await apiRequest("/telemetry");
+          render("Telemetry", result);
+        } catch (error) {
+          render("Telemetry load failed", error);
+        }
+      });
+
+      document.getElementById("refreshHealth").addEventListener("click", async () => {
+        try {
+          const result = await apiRequest("/healthz");
+          render("Health status", result);
+        } catch (error) {
+          render("Health check failed", error);
+        }
+      });
+    </script>
+  </body>
+</html>

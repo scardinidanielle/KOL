@@ -14,7 +14,7 @@ from .config import get_settings
 from .models import (
     FeatureRow,
     ManualOverride,
-    PersonalProfile,
+    ParticipantProfile,
     RawSensorEvent,
     WeatherEvent,
 )
@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 def _load_profile_features(session: Session, settings) -> dict[str, str | None]:
     profile = (
-        session.query(PersonalProfile)
-        .order_by(desc(PersonalProfile.created_at))
+        session.query(ParticipantProfile)
+        .order_by(desc(ParticipantProfile.updated_at))
         .first()
     )
     if not profile:

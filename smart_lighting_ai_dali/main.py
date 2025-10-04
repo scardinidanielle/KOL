@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from cryptography.fernet import Fernet, InvalidToken
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -17,7 +21,13 @@ from .dali import MockDALIController, TridonicUSBInterface
 from .db import Base, engine, get_db
 from .feature_engineering import aggregate_features, prepare_feature_windows
 from .logging_config import configure_logging
-from .models import Decision, FeatureRow, RawSensorEvent, WeatherEvent
+from .models import (
+    Decision,
+    FeatureRow,
+    ParticipantProfile,
+    RawSensorEvent,
+    WeatherEvent,
+)
 from .openai_client import AIController, FeatureWindow
 from .rate_limit import InMemoryRateLimiter
 from .retention import prune_old_data
@@ -28,6 +38,7 @@ from .schemas import (
     PaginatedTelemetry,
     PredictRequest,
     PredictResponse,
+    ProfileSubmission,
     SensorIngest,
     TelemetryItem,
     WeatherIngest,
@@ -61,6 +72,7 @@ def create_app(
     ai_controller = AIController(settings=settings, client=None)
     rate_limiter = InMemoryRateLimiter()
     scheduler = BackgroundScheduler()
+    fernet = Fernet(settings.fernet_key)
 
     def feature_job() -> None:
         with engine.begin() as connection:
@@ -113,6 +125,7 @@ def create_app(
     app.state.rate_limiter = rate_limiter
     app.state.logging_configured = True
     app.state.settings = settings
+    app.state.fernet = fernet
 
     def require_admin_token(authorization: str | None = Header(None)) -> None:
         if not settings.admin_token:
@@ -261,6 +274,80 @@ def create_app(
     def aggregate_now(db: Session = Depends(get_db)):
         aggregate_features(db, settings.feature_window_minutes)
         return {"ok": True}
+
+    @app.post("/profile", status_code=status.HTTP_201_CREATED)
+    def upsert_profile(
+        payload: ProfileSubmission, db: Session = Depends(get_db)
+    ) -> dict[str, str]:
+        data = payload.model_dump()
+        encrypted = fernet.encrypt(json.dumps(data).encode("utf-8")).decode("utf-8")
+        profile = (
+            db.query(ParticipantProfile)
+            .filter(ParticipantProfile.user_id == payload.user_id)
+            .one_or_none()
+        )
+        now = datetime.utcnow()
+        if profile:
+            profile.encrypted_payload = encrypted
+            profile.updated_at = now
+            created = False
+        else:
+            profile = ParticipantProfile(
+                user_id=payload.user_id,
+                encrypted_payload=encrypted,
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(profile)
+            created = True
+        db.commit()
+        return {"status": "created" if created else "updated"}
+
+    @app.get("/profile/{user_id}")
+    def get_profile(
+        user_id: str,
+        db: Session = Depends(get_db),
+    ) -> dict[str, object]:
+        profile = (
+            db.query(ParticipantProfile)
+            .filter(ParticipantProfile.user_id == user_id)
+            .one_or_none()
+        )
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        try:
+            decrypted = fernet.decrypt(profile.encrypted_payload.encode("utf-8"))
+        except InvalidToken as exc:
+            logger.error("Failed to decrypt profile", extra={"error": str(exc)})
+            raise HTTPException(status_code=500, detail="Profile is corrupted") from exc
+        data = json.loads(decrypted)
+        data.setdefault("user_id", user_id)
+        data["consent"] = bool(data.get("consent", True))
+        return data
+
+    @app.delete(
+        "/admin/profile/{user_id}",
+        dependencies=[Depends(require_admin_token)],
+        status_code=status.HTTP_200_OK,
+    )
+    def delete_profile(
+        user_id: str,
+        db: Session = Depends(get_db),
+    ) -> dict[str, bool]:
+        profile = (
+            db.query(ParticipantProfile)
+            .filter(ParticipantProfile.user_id == user_id)
+            .one_or_none()
+        )
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        db.delete(profile)
+        db.commit()
+        return {"ok": True}
+
+    frontend_dir = Path(__file__).resolve().parent / "frontend"
+    if frontend_dir.exists():
+        app.mount("/ui", StaticFiles(directory=frontend_dir, html=True), name="ui")
 
     return app
 
