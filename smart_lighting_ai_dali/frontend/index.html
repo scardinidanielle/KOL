@@ -126,7 +126,7 @@
         </form>
       </section>
 
-      <section class="grid gap-6 md:grid-cols-2">
+      <section class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <div class="bg-slate-900/70 border border-slate-800 rounded-lg p-6 space-y-4">
           <h2 class="text-xl font-semibold">Control</h2>
           <div class="grid gap-4">
@@ -161,20 +161,6 @@
             >
               Apply Control
             </button>
-            <div>
-              <h3 class="text-sm font-semibold uppercase text-slate-400 mb-2">Quick Scenes</h3>
-              <div class="flex flex-wrap gap-2">
-                <button data-scene="focus" class="scene-btn px-3 py-2 rounded bg-slate-800 hover:bg-slate-700">
-                  Focus
-                </button>
-                <button data-scene="relax" class="scene-btn px-3 py-2 rounded bg-slate-800 hover:bg-slate-700">
-                  Relax
-                </button>
-                <button data-scene="night" class="scene-btn px-3 py-2 rounded bg-slate-800 hover:bg-slate-700">
-                  Night
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -186,6 +172,47 @@
             </button>
             <button id="aggregate" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 rounded font-medium">
               Aggregate Now
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-slate-900/70 border border-slate-800 rounded-lg p-6 space-y-4">
+          <h2 class="text-xl font-semibold">Quick Scenes</h2>
+          <p class="text-sm text-slate-300">
+            Apply presets without changing any API calls.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              data-scene="Focus"
+              data-intensity="80"
+              data-cct="4500"
+              class="scene-btn px-3 py-2 rounded bg-slate-800 hover:bg-slate-700"
+            >
+              Focus
+            </button>
+            <button
+              data-scene="Collaborate"
+              data-intensity="65"
+              data-cct="4000"
+              class="scene-btn px-3 py-2 rounded bg-slate-800 hover:bg-slate-700"
+            >
+              Collaborate
+            </button>
+            <button
+              data-scene="Relax"
+              data-intensity="40"
+              data-cct="3000"
+              class="scene-btn px-3 py-2 rounded bg-slate-800 hover:bg-slate-700"
+            >
+              Relax
+            </button>
+            <button
+              data-scene="Night"
+              data-intensity="20"
+              data-cct="2700"
+              class="scene-btn px-3 py-2 rounded bg-slate-800 hover:bg-slate-700"
+            >
+              Night
             </button>
           </div>
         </div>
@@ -247,6 +274,24 @@
               Refresh Health
             </button>
           </div>
+        </div>
+      </section>
+
+      <section class="bg-slate-900/70 border border-slate-800 rounded-lg p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xl font-semibold">Telemetry History</h2>
+          <span class="text-xs text-slate-400">Latest 10 entries</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-left text-sm">
+            <thead class="text-slate-400 uppercase text-xs border-b border-slate-800">
+              <tr>
+                <th class="py-2 pr-4">Timestamp</th>
+                <th class="py-2">Details</th>
+              </tr>
+            </thead>
+            <tbody id="telemetryHistory" class="divide-y divide-slate-800"></tbody>
+          </table>
         </div>
       </section>
 
@@ -391,26 +436,23 @@
 
       document.querySelectorAll(".scene-btn").forEach((button) => {
         button.addEventListener("click", async () => {
-          const scene = button.dataset.scene;
-          const scenes = {
-            focus: { intensity: 85, cct: 5000 },
-            relax: { intensity: 40, cct: 3200 },
-            night: { intensity: 15, cct: 2200 },
-          };
-          const preset = scenes[scene] || scenes.relax;
+          const sceneName = button.dataset.scene || "Scene";
+          const intensity = Number(button.dataset.intensity || 0);
+          const cct = Number(button.dataset.cct || 2700);
           try {
             const result = await apiRequest("/control", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                ...preset,
-                reason: `${scene} scene`,
+                intensity,
+                cct,
+                reason: `${sceneName} scene`,
                 source: "scene",
               }),
             });
-            render(`${scene} scene applied`, result);
+            render(`${sceneName} scene applied`, result);
           } catch (error) {
-            render(`Failed to apply ${scene} scene`, error);
+            render(`Failed to apply ${sceneName} scene`, error);
           }
         });
       });
@@ -477,10 +519,59 @@
         }
       });
 
+      function updateTelemetryHistory(items = []) {
+        const tbody = document.getElementById("telemetryHistory");
+        if (!tbody) {
+          return;
+        }
+        tbody.innerHTML = "";
+        items.slice(0, 10).forEach((item) => {
+          const row = document.createElement("tr");
+          const timestamp =
+            item.timestamp ||
+            item.time ||
+            item.created_at ||
+            item.recorded_at ||
+            item.at ||
+            "";
+          const timestampCell = document.createElement("td");
+          timestampCell.className = "py-2 pr-4 align-top";
+          timestampCell.textContent = timestamp;
+          const detailsCell = document.createElement("td");
+          detailsCell.className = "py-2 text-slate-300";
+          try {
+            detailsCell.textContent = JSON.stringify(item);
+          } catch (error) {
+            detailsCell.textContent = String(item);
+          }
+          row.appendChild(timestampCell);
+          row.appendChild(detailsCell);
+          tbody.appendChild(row);
+        });
+        if (!tbody.children.length) {
+          const emptyRow = document.createElement("tr");
+          const cell = document.createElement("td");
+          cell.colSpan = 2;
+          cell.className = "py-4 text-center text-slate-500";
+          cell.textContent = "No telemetry loaded yet.";
+          emptyRow.appendChild(cell);
+          tbody.appendChild(emptyRow);
+        }
+      }
+
+      updateTelemetryHistory();
+
       document.getElementById("loadTelemetry").addEventListener("click", async () => {
         try {
           const result = await apiRequest("/telemetry");
           render("Telemetry", result);
+          if (Array.isArray(result)) {
+            updateTelemetryHistory(result);
+          } else if (result && Array.isArray(result.items)) {
+            updateTelemetryHistory(result.items);
+          } else {
+            updateTelemetryHistory([]);
+          }
         } catch (error) {
           render("Telemetry load failed", error);
         }
