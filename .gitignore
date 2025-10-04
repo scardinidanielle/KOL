@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+.env
+.env.*
+smart_lighting_ai_dali.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
