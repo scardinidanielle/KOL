@@ -67,3 +67,15 @@ def test_control_endpoint_and_pagination(client, db_session):
     telemetry_data = telemetry.json()
     assert len(telemetry_data["items"]) == 1
     assert telemetry_data["next_offset"] is None or telemetry_data["next_offset"] >= 1
+
+
+def test_control_requires_override_minutes_when_manual_override_enabled(client):
+    response = client.post(
+        "/control",
+        json={
+            "intensity": 50,
+            "cct": 4000,
+            "manual_override": True,
+        },
+    )
+    assert response.status_code == 422

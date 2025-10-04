@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SensorIngest(BaseModel):
@@ -37,6 +37,12 @@ class ControlRequest(BaseModel):
     source: str = Field("ai")
     manual_override: bool = False
     override_minutes: int | None = Field(default=None, ge=5, le=180)
+
+    @model_validator(mode="after")
+    def validate_manual_override(self) -> "ControlRequest":
+        if self.manual_override and self.override_minutes is None:
+            raise ValueError("override_minutes is required when manual_override is true")
+        return self
 
 
 class ControlResponse(BaseModel):
