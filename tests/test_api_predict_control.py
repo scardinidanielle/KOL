@@ -67,3 +67,17 @@ def test_control_endpoint_and_pagination(client, db_session):
     telemetry_data = telemetry.json()
     assert len(telemetry_data["items"]) == 1
     assert telemetry_data["next_offset"] is None or telemetry_data["next_offset"] >= 1
+
+
+def test_predict_rejects_excessive_payload(client, db_session):
+    seed_features(db_session)
+    ai_controller = client.app.state.ai_controller
+    original_cap = ai_controller.settings.payload_cap_bytes
+    ai_controller.settings.payload_cap_bytes = 10
+    try:
+        response = client.post("/predict", json={})
+    finally:
+        ai_controller.settings.payload_cap_bytes = original_cap
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Payload exceeds cap"}
