@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     anti_flicker_delta_per_second: int = Field(20)
     min_update_interval_seconds: int = Field(5)
 
+    use_mock_dali: bool = Field(False, validation_alias="USE_MOCK_DALI")
+
     quiet_hours_start: int = Field(22)
     quiet_hours_end: int = Field(6)
 

@@ -34,11 +34,16 @@ Wiring summary:
    ```
    - Generate a Fernet key: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
    - For the sample dataset, use `FERNET_KEY=3hWrYIogeMKAoBFoQVoM23bzb1bqGTGSQhZWWSWxMgI=`.
-2. Install dependencies:
+2. Set environment keys (all optional except `FERNET_KEY`):
+   - `USE_MOCK_DALI` – defaults to `false`, set to `true` for simulation mode.
+   - `OPENAI_API_KEY` – optional; when unset, the rules-based fallback is used.
+   - `WEATHER_API_KEY` – optional upstream integration key.
+   - `DB_URL` – database connection string (default SQLite file).
+3. Install dependencies:
    ```bash
    pip install -e .[dev]
    ```
-3. Initialize the database (SQLite by default):
+4. Initialize the database (SQLite by default):
    ```bash
    python -c "from smart_lighting_ai_dali.db import Base, engine; Base.metadata.create_all(bind=engine)"
    ```
@@ -67,6 +72,18 @@ services:
 
 API docs available at `http://localhost:8000/docs`.
 
+### Simulation mode
+
+Enable the mock controller (`USE_MOCK_DALI=true`) to run the entire stack without physical DALI hardware. In separate terminals:
+
+```bash
+python scripts/simulate_sensor.py --interval 2 --duration 30
+python scripts/ingest_weather.py --interval 60 --duration 5
+uvicorn smart_lighting_ai_dali.main:app --reload
+```
+
+The mock controller mirrors DT8 anti-flicker behaviour, and telemetry grows as `/control` decisions are issued.
+
 ### Loading example data
 
 1. Load the encrypted personal profile:
@@ -87,15 +104,7 @@ API docs available at `http://localhost:8000/docs`.
    print("stored profile")
    PY
    ```
-2. Ingest weather:
-   ```bash
-   python smart_lighting_ai_dali/scripts/ingest_weather.py http://localhost:8000/ingest/weather smart_lighting_ai_dali/data/examples/weather.json
-   ```
-3. Simulate sensor readings:
-   ```bash
-   python smart_lighting_ai_dali/scripts/simulate_sensor.py http://localhost:8000/ingest/sensor smart_lighting_ai_dali/data/examples/sensors.csv
-   ```
-4. Trigger feature aggregation job manually if needed:
+2. Trigger feature aggregation job manually if needed:
    ```bash
    python - <<'PY'
    from smart_lighting_ai_dali.db import session_scope
