@@ -21,28 +21,29 @@ The application exposes a REST API and a local web console so facilities teams c
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 ```mermaid
 flowchart LR
-  Sensors[Occupancy & Lux Sensors / Weather Feed / Profiles]
-  API[FastAPI Service]
-  DB[(SQLite / SQLAlchemy)]
-  Scheduler[Feature & Retention Jobs]
-  AI[OpenAI Controller<br/>(payload capped)]
-  Control[Control Service]
-  DALI[DALI Hardware<br/>(Mock or Tridonic USB)]
-  UI[Local Web UI /ui]
+    Sensors[Occupancy & Lux Sensors / Weather Feed / Profiles]
+    API[FastAPI Service]
+    DB[(SQLite / SQLAlchemy)]
+    Scheduler[Feature & Retention Jobs]
+    AI[OpenAI Controller (payload capped)]
+    Control[Control Service]
+    DALI[DALI Hardware (Mock or Tridonic USB)]
+    UI[Local Web UI /ui]
 
-  Sensors -->|/ingest| API
-  API --> DB
-  Scheduler --> DB
-  DB -->|Feature windows| AI
-  AI -->|Setpoint| Control
-  Control -->|DT8 commands| DALI
-  DALI -->|Diagnostics| API
-  API --> UI
-  UI -->|Admin + Ops| API
+    Sensors -->|/ingest| API
+    API --> DB
+    Scheduler --> DB
+    DB -->|Feature windows| AI
+    AI -->|Setpoint| Control
+    Control -->|DT8 commands| DALI
+    DALI -->|Diagnostics| API
+    API --> UI
+    UI -->|Admin + Ops| API
+
 ```
 
 ---
