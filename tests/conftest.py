@@ -34,6 +34,7 @@ from smart_lighting_ai_dali.models import (  # noqa: E402
     Decision,
     FeatureRow,
     ManualOverride,
+    ParticipantProfile,
     PersonalProfile,
     RawSensorEvent,
     Telemetry,
@@ -70,6 +71,14 @@ def app(session):  # noqa: ANN001
             )
         )
         session.commit()
+    if not session.query(ParticipantProfile).count():
+        session.add(
+            ParticipantProfile(
+                user_id=blob["profile_id"],
+                encrypted_payload=blob["encrypted_payload"],
+            )
+        )
+        session.commit()
     yield app
     try:
         app.state.scheduler.shutdown(wait=False)
@@ -98,6 +107,7 @@ def cleanup(db_session):  # noqa: ANN001
         WeatherEvent,
         ManualOverride,
         Telemetry,
+        ParticipantProfile,
     )
     for model in models:
         db_session.query(model).delete()

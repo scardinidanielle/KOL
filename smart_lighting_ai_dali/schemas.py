@@ -102,19 +102,21 @@ class PredictResponse(BaseModel):
     features_used: int
 
 
-class PersonalProfileIn(BaseModel):
-    profile_id: str
-    age: int
-    sex: str
-    visual_impairment: str
-    chronotype: str
-    schedules: dict[str, str]
+class ProfileSubmission(BaseModel):
+    user_id: str = Field(..., min_length=1)
+    consent: bool = True
+    age: int | None = Field(default=None, ge=0, le=120)
+    sex: str | None = None
+    visual_impairment: str | None = None
+    chronotype: str | None = None
+    schedules: dict[str, str] = Field(default_factory=dict)
+    preferences: dict[str, str] = Field(default_factory=dict)
 
-    @field_validator("age")
+    @field_validator("user_id")
     @classmethod
-    def validate_age(cls, value: int) -> int:
-        if value < 0 or value > 120:
-            raise ValueError("age out of range")
+    def validate_user_id(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("user_id cannot be blank")
         return value
 
 
@@ -131,5 +133,5 @@ __all__ = [
     "HealthStatus",
     "FeaturePayload",
     "PredictResponse",
-    "PersonalProfileIn",
+    "ProfileSubmission",
 ]

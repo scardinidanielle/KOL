@@ -48,6 +48,18 @@ class PersonalProfile(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class ParticipantProfile(Base):
+    __tablename__ = "participant_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(64), unique=True, nullable=False)
+    encrypted_payload = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+
 class FeatureRow(Base):
     __tablename__ = "features"
 
@@ -117,6 +129,7 @@ __all__ = [
     "RawSensorEvent",
     "WeatherEvent",
     "PersonalProfile",
+    "ParticipantProfile",
     "FeatureRow",
     "Decision",
     "Telemetry",
