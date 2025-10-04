@@ -69,6 +69,7 @@ def create_app(settings: Optional[Settings] = None, *, use_mock_dali: bool = Tru
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        # Startup: launch recurring jobs once FastAPI triggers the lifespan hook.
         if not scheduler.running:
             scheduler.add_job(
                 feature_job,
@@ -87,12 +88,14 @@ def create_app(settings: Optional[Settings] = None, *, use_mock_dali: bool = Tru
         try:
             yield
         finally:
+            # Shutdown: ensure the scheduler stops cleanly with the application.
             try:
                 scheduler.shutdown(wait=False)
             except Exception:  # noqa: BLE001
                 pass
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
+    # Expose shared services immediately so tests and dependent modules can access them.
     app.state.scheduler = scheduler
     app.state.control_service = control_service
     app.state.ai_controller = ai_controller
