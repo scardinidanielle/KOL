@@ -12,6 +12,12 @@ AI-driven control surface for DALI-2 DT8 tunable-white luminaires using the Trid
 - Encrypted personal profile storage using Fernet keys supplied via `.env`.
 - Export utilities and notebook workflow for offline tuning.
 
+## Documentation
+
+- [Executive overview](docs/00-executive-overview.md)
+- [Developer guide](docs/10-developer-guide.md)
+- [Operations runbook](docs/20-operations-runbook.md)
+
 ## Hardware overview
 
 - **Controller**: Tridonic DALI USB (connects to the service host).
@@ -25,6 +31,15 @@ Wiring summary:
 3. Ensure the host running this service can access the USB device (`/dev/ttyACM*`).
 
 ## Getting started
+
+### Quick start
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+USE_MOCK_DALI=true uvicorn smart_lighting_ai_dali.main:app --reload
+```
 
 ### Environment
 
@@ -120,6 +135,13 @@ The mock controller mirrors DT8 anti-flicker behaviour, and telemetry grows as `
 ```bash
 http POST :8000/predict
 http POST :8000/control intensity=55 cct=4000 reason="manual tweak" manual_override:=true override_minutes:=30
+```
+
+### Admin endpoint
+
+```bash
+curl -X POST http://localhost:8000/admin/aggregate-now \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}"
 ```
 
 The `/predict` endpoint only reads the most recent feature windows (1–3 rows) ensuring payloads stay under 2 KiB. `/control` applies DALI DT8 commands, stores decisions, respects anti-flicker guards, and manages manual overrides that auto-expire after 30 minutes.
