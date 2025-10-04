@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     retention_raw_days: int = Field(30)
     retention_feature_days: int = Field(90)
     retention_decision_days: int = Field(180)
+    retention_override_grace_seconds: int = Field(60)
 
     @field_validator("feature_history_rows")
     @classmethod
