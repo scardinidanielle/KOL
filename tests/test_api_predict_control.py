@@ -69,7 +69,22 @@ def test_control_endpoint_and_pagination(client, db_session):
     assert telemetry_data["next_offset"] is None or telemetry_data["next_offset"] >= 1
 
 
+def test_control_requires_override_minutes_when_manual_override_enabled(client):
+    """Ensure manual override requires override duration (minutes)."""
+    response = client.post(
+        "/control",
+        json={
+            "intensity": 50,
+            "cct": 4000,
+            "manual_override": True,
+        },
+    )
+    # Should fail validation due to missing override duration
+    assert response.status_code == 422
+
+
 def test_predict_rejects_excessive_payload(client, db_session):
+    """Ensure payload size limit is enforced."""
     seed_features(db_session)
     ai_controller = client.app.state.ai_controller
     original_cap = ai_controller.settings.payload_cap_bytes
