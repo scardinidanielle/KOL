@@ -10,24 +10,25 @@ Key value drivers:
 
 ```mermaid
 flowchart LR
-    Sensors[Occupancy & Lux Sensors]\n/ Weather Feed / Profiles
-    API[FastAPI Service]
-    DB[(SQLite / SQLAlchemy)]
-    Scheduler[Feature & Retention Jobs]
-    AI[OpenAI Controller\n(payload capped)]
-    Control[Control Service]
-    DALI[DALI Hardware\n(Mock or Tridonic USB)]
-    UI[Local Web UI /ui]
+  Sensors[Occupancy & Lux Sensors / Weather Feed / Profiles]
+  API[FastAPI Service]
+  DB[(SQLite / SQLAlchemy)]
+  Scheduler[Feature & Retention Jobs]
+  AI[OpenAI Controller<br/>(payload capped)]
+  Control[Control Service]
+  DALI[DALI Hardware<br/>(Mock or Tridonic USB)]
+  UI[Local Web UI /ui]
 
-    Sensors -->|/ingest| API
-    API --> DB
-    Scheduler --> DB
-    DB -->|Feature windows| AI
-    AI -->|Setpoint| Control
-    Control -->|DT8 commands| DALI
-    DALI -->|Diagnostics| API
-    API --> UI
-    UI -->|Admin + Ops| API
+  Sensors -->|/ingest| API
+  API --> DB
+  Scheduler --> DB
+  DB -->|Feature windows| AI
+  AI -->|Setpoint| Control
+  Control -->|DT8 commands| DALI
+  DALI -->|Diagnostics| API
+  API --> UI
+  UI -->|Admin + Ops| API
+
 ```
 
 Smart Lighting AI can be deployed on a bench for rapid prototyping or in production alongside existing facility systems. With consistent APIs and encrypted storage, the platform is ready for incremental integration into enterprise energy management programs.
