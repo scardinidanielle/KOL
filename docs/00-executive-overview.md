@@ -25,14 +25,14 @@ The application exposes a REST API and a local web console so facilities teams c
 
 ```mermaid
 flowchart LR
-    Sensors[Occupancy & Lux Sensors / Weather Feed / Profiles]
-    API[FastAPI Service]
-    DB[(SQLite / SQLAlchemy)]
-    Scheduler[Feature & Retention Jobs]
-    AI[OpenAI Controller (payload capped)]
-    Control[Control Service]
-    DALI[DALI Hardware (Mock or Tridonic USB)]
-    UI[Local Web UI /ui]
+    Sensors["Occupancy & Lux Sensors / Weather Feed / Profiles"]
+    API["FastAPI Service"]
+    DB[["SQLite / SQLAlchemy"]]
+    Scheduler["Feature & Retention Jobs"]
+    AI["OpenAI Controller - payload capped"]
+    Control["Control Service"]
+    DALI["DALI Hardware - Mock or Tridonic USB"]
+    UI["Local Web UI /ui"]
 
     Sensors -->|/ingest| API
     API --> DB
