@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from .config import Settings, get_settings
 from .control_service import ControlService
-from .dali import MockDALIInterface, TridonicUSBInterface
+from .dali import MockDALIController, TridonicUSBInterface
 from .db import Base, engine, get_db
 from .feature_engineering import aggregate_features, prepare_feature_windows
 from .logging_config import configure_logging
@@ -37,7 +37,11 @@ logger = logging.getLogger(__name__)
 _LOGGING_CONFIGURED = False
 
 
-def create_app(settings: Optional[Settings] = None, *, use_mock_dali: bool = True) -> FastAPI:
+def create_app(
+    settings: Optional[Settings] = None,
+    *,
+    use_mock_dali: bool | None = None,
+) -> FastAPI:
     global _LOGGING_CONFIGURED
 
     settings = settings or get_settings()
@@ -45,7 +49,13 @@ def create_app(settings: Optional[Settings] = None, *, use_mock_dali: bool = Tru
         configure_logging()
         _LOGGING_CONFIGURED = True
     Base.metadata.create_all(bind=engine)
-    dali = MockDALIInterface() if use_mock_dali else TridonicUSBInterface()
+    if use_mock_dali is None:
+        use_mock_dali = settings.use_mock_dali
+    dali = (
+        MockDALIController(settings=settings)
+        if use_mock_dali
+        else TridonicUSBInterface()
+    )
     control_service = ControlService(dali=dali, settings=settings)
     ai_controller = AIController(settings=settings, client=None)
     rate_limiter = InMemoryRateLimiter()

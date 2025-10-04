@@ -2,6 +2,7 @@
 
 from .interface import (
     DALIInterface,
+    MockDALIController,
     MockDALIInterface,
     TridonicUSBInterface,
     clamp_cct,
@@ -11,6 +12,7 @@ from .interface import (
 
 __all__ = [
     "DALIInterface",
+    "MockDALIController",
     "MockDALIInterface",
     "TridonicUSBInterface",
     "clamp_intensity",

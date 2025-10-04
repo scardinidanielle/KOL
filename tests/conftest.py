@@ -15,6 +15,7 @@ TEST_FERNET_KEY = "3hWrYIogeMKAoBFoQVoM23bzb1bqGTGSQhZWWSWxMgI="
 temp_dir = Path(tempfile.mkdtemp())
 os.environ.setdefault("FERNET_KEY", TEST_FERNET_KEY)
 os.environ.setdefault("DB_URL", f"sqlite:///{temp_dir / 'test.db'}")
+os.environ.setdefault("USE_MOCK_DALI", "true")
 BASE_DIR = Path(__file__).resolve().parents[1]
 
 from smart_lighting_ai_dali import config  # noqa: E402
