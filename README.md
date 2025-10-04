@@ -54,6 +54,7 @@ USE_MOCK_DALI=true uvicorn smart_lighting_ai_dali.main:app --reload
    - `OPENAI_API_KEY` – optional; when unset, the rules-based fallback is used.
    - `WEATHER_API_KEY` – optional upstream integration key.
    - `DB_URL` – database connection string (default SQLite file).
+   - `ADMIN_TOKEN` – Bearer token required for secure admin calls (example: `super-secret-admin-token`).
 3. Install dependencies:
    ```bash
    pip install -e .[dev]
@@ -145,6 +146,16 @@ curl -X POST http://localhost:8000/admin/aggregate-now \
 ```
 
 The `/predict` endpoint only reads the most recent feature windows (1–3 rows) ensuring payloads stay under 2 KiB. `/control` applies DALI DT8 commands, stores decisions, respects anti-flicker guards, and manages manual overrides that auto-expire after 30 minutes.
+
+### Admin endpoint
+
+Trigger feature aggregation on demand with a Bearer token:
+
+```bash
+http POST :8000/admin/aggregate-now "Authorization:Bearer super-secret-admin-token"
+```
+
+The endpoint responds with `{ "ok": true }` when the aggregation runs successfully.
 
 ## Data policy and retention
 

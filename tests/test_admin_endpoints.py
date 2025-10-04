@@ -25,4 +25,4 @@ def test_admin_aggregate_now_creates_features(client, db_session):
     )
     assert response.status_code == 200
     payload = response.json()
-    assert payload == {"created_features": 1}
+    assert payload == {"ok": True}

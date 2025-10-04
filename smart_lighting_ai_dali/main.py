@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -112,6 +112,18 @@ def create_app(
     app.state.ai_controller = ai_controller
     app.state.rate_limiter = rate_limiter
     app.state.logging_configured = True
+
+    def require_admin_token(
+        authorization: str | None = Header(None),
+        settings: Settings = Depends(get_settings),
+    ) -> None:
+        if not settings.admin_token:
+            raise HTTPException(status_code=503, detail="Admin token not configured")
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing or invalid token")
+        token = authorization.split(" ", 1)[1]
+        if token != settings.admin_token:
+            raise HTTPException(status_code=401, detail="Unauthorized")
 
     @app.middleware("http")
     async def rate_limit_middleware(request: Request, call_next):  # noqa: ANN001
@@ -247,19 +259,16 @@ def create_app(
             scheduler=scheduler_status,
         )
 
-    @app.post("/admin/aggregate-now")
-    def aggregate_now(request: Request, db: Session = Depends(get_db)):
-        admin_token = settings.admin_token
-        auth_header = request.headers.get("Authorization")
-        if (
-            not admin_token
-            or auth_header is None
-            or auth_header.strip() != f"Bearer {admin_token}"
-        ):
-            raise HTTPException(status_code=401, detail="Unauthorized")
-        feature_row = aggregate_features(db, settings.feature_window_minutes)
-        created_count = 1 if feature_row else 0
-        return {"created_features": created_count}
+    @app.post(
+        "/admin/aggregate-now",
+        dependencies=[Depends(require_admin_token)],
+    )
+    def aggregate_now(
+        db: Session = Depends(get_db),
+        settings: Settings = Depends(get_settings),
+    ):
+        aggregate_features(db, settings.feature_window_minutes)
+        return {"ok": True}
 
     return app
 
