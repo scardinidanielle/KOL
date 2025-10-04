@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smart-lighting-ai-dali"
+version = "0.1.0"
+description = "AI-driven smart lighting controller for DALI-2 DT8 luminaires"
+authors = [{name = "Smart Lighting Team"}]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.6",
+    "apscheduler>=3.10",
+    "cryptography>=41",
+    "openai>=1.30",
+    "httpx>=0.27",
+    "requests>=2.32",
+    "pandas>=2.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "flake8>=7.0",
+    "mypy>=1.10",
+]
+
+[tool.setuptools.package-data]
+"smart_lighting_ai_dali" = ["data/examples/*", "notebooks/*.ipynb"]
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203"]
