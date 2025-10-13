@@ -218,6 +218,76 @@
         </div>
       </section>
 
+      <section class="bg-slate-900/70 border border-slate-800 rounded-lg p-6 space-y-6">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 class="text-xl font-semibold">DALI &amp; Sensor Diagnostics</h2>
+            <p class="text-sm text-slate-300">
+              Check whether the controller and sensors are reporting live data.
+            </p>
+          </div>
+          <button
+            id="refreshDiagnostics"
+            class="self-start px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded font-medium"
+          >
+            Refresh Diagnostics
+          </button>
+        </div>
+        <div class="grid gap-6 md:grid-cols-2">
+          <div class="space-y-3">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-400">Mode</p>
+              <p id="daliMode" class="text-lg font-semibold">—</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-400">Status</p>
+              <p id="daliStatusValue" class="text-lg font-semibold">—</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-400">Last Command</p>
+              <p id="daliLastCommand" class="text-sm text-slate-200">—</p>
+            </div>
+            <div class="grid grid-cols-2 gap-4 text-sm text-slate-300">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Sensor Events</p>
+                <p id="sensorEventCount" class="font-medium">0</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Decisions</p>
+                <p id="decisionCount" class="font-medium">0</p>
+              </div>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-400">Sensor Probe</p>
+              <p id="sensorProbeSupport" class="text-sm text-slate-200">—</p>
+            </div>
+          </div>
+          <div class="space-y-4">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-400">Latest Sensor Event</p>
+              <pre
+                id="latestSensorEvent"
+                class="bg-slate-950/70 border border-slate-800 rounded p-3 text-xs overflow-auto max-h-32"
+              >—</pre>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-400">Latest Decision</p>
+              <pre
+                id="latestDecision"
+                class="bg-slate-950/70 border border-slate-800 rounded p-3 text-xs overflow-auto max-h-32"
+              >—</pre>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-400">Live Sensor Probe</p>
+              <pre
+                id="sensorProbe"
+                class="bg-slate-950/70 border border-slate-800 rounded p-3 text-xs overflow-auto max-h-32"
+              >—</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="grid gap-6 md:grid-cols-2">
         <div class="bg-slate-900/70 border border-slate-800 rounded-lg p-6 space-y-4">
           <h2 class="text-xl font-semibold">Ingest</h2>
@@ -304,10 +374,90 @@
     <script>
       const output = document.getElementById("output");
       const adminTokenInput = document.getElementById("adminToken");
+      const diagnosticsMode = document.getElementById("daliMode");
+      const diagnosticsStatus = document.getElementById("daliStatusValue");
+      const diagnosticsCommand = document.getElementById("daliLastCommand");
+      const sensorEventCountEl = document.getElementById("sensorEventCount");
+      const decisionCountEl = document.getElementById("decisionCount");
+      const latestSensorEventEl = document.getElementById("latestSensorEvent");
+      const latestDecisionEl = document.getElementById("latestDecision");
+      const sensorProbeEl = document.getElementById("sensorProbe");
+      const sensorProbeSupportEl = document.getElementById("sensorProbeSupport");
+      const refreshDiagnosticsButton = document.getElementById("refreshDiagnostics");
 
       function render(action, data) {
         const timestamp = new Date().toISOString();
         output.textContent = `${timestamp} — ${action}\n${JSON.stringify(data, null, 2)}`;
+      }
+
+      function formatJSON(value) {
+        if (!value) {
+          return "—";
+        }
+        try {
+          return JSON.stringify(value, null, 2);
+        } catch (error) {
+          return String(value);
+        }
+      }
+
+      function normalizeText(value) {
+        if (typeof value !== "string") {
+          return value;
+        }
+        return value.trim();
+      }
+
+      function updateDiagnosticsPanel(data = {}) {
+        const diagnostics = data.diagnostics || {};
+        if (diagnosticsMode) {
+          const mode = data.mode ? `${data.mode.slice(0, 1).toUpperCase()}${data.mode.slice(1)}` : "—";
+          diagnosticsMode.textContent = mode;
+        }
+        if (diagnosticsStatus) {
+          const status = normalizeText(
+            diagnostics.status || diagnostics.mode || diagnostics.state || "—"
+          );
+          diagnosticsStatus.textContent = status || "—";
+        }
+        if (diagnosticsCommand) {
+          const intensity =
+            diagnostics.intensity ??
+            diagnostics.last_intensity ??
+            diagnostics.lastIntensity;
+          const cct =
+            diagnostics.cct ??
+            diagnostics.last_cct ??
+            diagnostics.last_cct_value ??
+            diagnostics.lastCctValue;
+          if (intensity != null || cct != null) {
+            const intensityText = intensity != null ? normalizeText(String(intensity)) : "?";
+            const cctText = cct != null ? normalizeText(String(cct)) : "?";
+            diagnosticsCommand.textContent = `${intensityText} @ ${cctText}`;
+          } else {
+            diagnosticsCommand.textContent = "—";
+          }
+        }
+        if (sensorEventCountEl) {
+          sensorEventCountEl.textContent = String(data.sensor_event_count ?? 0);
+        }
+        if (decisionCountEl) {
+          decisionCountEl.textContent = String(data.decision_count ?? 0);
+        }
+        if (sensorProbeSupportEl) {
+          sensorProbeSupportEl.textContent = data.supports_sensor_probe
+            ? "Available"
+            : "Not available";
+        }
+        if (latestSensorEventEl) {
+          latestSensorEventEl.textContent = formatJSON(data.latest_sensor_event);
+        }
+        if (latestDecisionEl) {
+          latestDecisionEl.textContent = formatJSON(data.latest_decision);
+        }
+        if (sensorProbeEl) {
+          sensorProbeEl.textContent = formatJSON(data.sensor_probe);
+        }
       }
 
       async function apiRequest(path, options = {}) {
@@ -585,6 +735,24 @@
           render("Health check failed", error);
         }
       });
+
+      async function refreshDiagnostics() {
+        try {
+          const result = await apiRequest("/diagnostics/dali");
+          updateDiagnosticsPanel(result);
+          render("Diagnostics refreshed", result);
+        } catch (error) {
+          updateDiagnosticsPanel();
+          render("Diagnostics refresh failed", error);
+        }
+      }
+
+      if (refreshDiagnosticsButton) {
+        refreshDiagnosticsButton.addEventListener("click", refreshDiagnostics);
+      }
+
+      updateDiagnosticsPanel();
+      refreshDiagnostics();
     </script>
   </body>
 </html>
