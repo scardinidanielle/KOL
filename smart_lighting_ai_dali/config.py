@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     min_update_interval_seconds: int = Field(5)
 
     use_mock_dali: bool = Field(False, validation_alias="USE_MOCK_DALI")
+    # Flag enabling legacy Tridonic adapters that only understand broadcast dimming.
+    dali_basic_mode: bool = Field(
+        False,
+        validation_alias=AliasChoices("DALI_BASIC_MODE", "dali_basic_mode"),
+        description="Flag to force broadcast-only Tridonic USB mode.",
+    )
 
     quiet_hours_start: int = Field(22)
     quiet_hours_end: int = Field(6)

@@ -46,6 +46,12 @@ class DALIInterface(ABC):
 
         raise NotImplementedError
 
+    @property
+    def supports_cct(self) -> bool:
+        """Return whether the interface can act on colour temperature."""
+
+        return True
+
 
 def dt8_warm_cool_to_bytes(cct: int) -> bytes:
     """Map CCT to a DT8 warm/cool command (simplified for tunable white)."""
@@ -60,11 +66,59 @@ def dt8_warm_cool_to_bytes(cct: int) -> bytes:
 class TridonicUSBInterface(DALIInterface):
     """Stubbed implementation for Tridonic DALI USB interface."""
 
-    def __init__(self) -> None:
+    def __init__(self, settings=None) -> None:
+        # We allow forcing broadcast-only behaviour via configuration to match
+        # legacy Tridonic USB adapters that lack DT8 features.
+        self.settings = settings or get_settings()
+        self.basic_mode = bool(getattr(self.settings, "dali_basic_mode", False))
         self._last_command: DT8Command | None = None
+        self._last_basic_command: Dict[str, str] | None = None
+
+    @property
+    def supports_cct(self) -> bool:
+        # In basic broadcast mode we cannot change colour temperature.
+        return not self.basic_mode
 
     def send_dt8(self, intensity: int, cct: int) -> None:
         intensity_clamped = clamp_intensity(intensity)
+        if self.basic_mode:
+            # Basic mode mimics IEC 62386-101 broadcast commands only.
+            if intensity_clamped <= 0:
+                logger.info(
+                    "Basic DALI mode active – sending RECALL MIN LEVEL",
+                    extra={"command": {"type": "RECALL_MIN_LEVEL"}},
+                )
+                self._last_basic_command = {"type": "RECALL_MIN_LEVEL", "intensity": "0"}
+            elif intensity_clamped > 70:
+                logger.info(
+                    "Basic DALI mode active – sending RECALL MAX LEVEL",
+                    extra={"command": {"type": "RECALL_MAX_LEVEL"}},
+                )
+                self._last_basic_command = {
+                    "type": "RECALL_MAX_LEVEL",
+                    "intensity": str(intensity_clamped),
+                }
+            else:
+                arc_power = round(intensity_clamped / 100 * 254)
+                logger.info(
+                    "Basic DALI mode active – sending DIRECT ARC POWER",
+                    extra={
+                        "command": {
+                            "type": "DIRECT_ARC_POWER",
+                            "arc_power": arc_power,
+                            "intensity": intensity_clamped,
+                        }
+                    },
+                )
+                self._last_basic_command = {
+                    "type": "DIRECT_ARC_POWER",
+                    "arc_power": str(arc_power),
+                    "intensity": str(intensity_clamped),
+                }
+            self._last_command = None
+            time.sleep(0.05)
+            return
+
         cct_bytes = dt8_warm_cool_to_bytes(cct)
         payload = DT8Command(address=0xFF, data=intensity_clamped.to_bytes(1, "big") + cct_bytes)
         logger.info("Sending DT8 command", extra={
@@ -74,14 +128,20 @@ class TridonicUSBInterface(DALIInterface):
                 "cct": int.from_bytes(cct_bytes, "big"),
             }
         })
+        self._last_basic_command = None
         self._last_command = payload
         time.sleep(0.05)  # simulate transmission delay
 
     def diagnostics(self) -> dict[str, str]:
+        if self.basic_mode:
+            if not self._last_basic_command:
+                return {"status": "idle", "mode": "basic"}
+            return {"status": "ok", "mode": "basic", **self._last_basic_command}
         if self._last_command is None:
-            return {"status": "idle"}
+            return {"status": "idle", "mode": "dt8"}
         return {
             "status": "ok",
+            "mode": "dt8",
             "last_intensity": str(self._last_command.data[0]),
             "last_cct_value": str(int.from_bytes(self._last_command.data[1:], "big")),
         }
