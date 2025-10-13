@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from cryptography.fernet import Fernet, InvalidToken
@@ -73,6 +73,29 @@ def create_app(
     rate_limiter = InMemoryRateLimiter()
     scheduler = BackgroundScheduler()
     fernet = Fernet(settings.fernet_key)
+
+    def serialize_sensor_event(event: RawSensorEvent | None) -> dict[str, Any] | None:
+        if not event:
+            return None
+        return {
+            "timestamp": event.timestamp.isoformat() if event.timestamp else None,
+            "ambient_lux": event.ambient_lux,
+            "presence": bool(event.presence),
+        }
+
+    def serialize_decision(decision: Decision | None) -> dict[str, Any] | None:
+        if not decision:
+            return None
+        return {
+            "decided_at": decision.decided_at.isoformat()
+            if decision.decided_at
+            else None,
+            "intensity": decision.intensity,
+            "cct": decision.cct,
+            "reason": decision.reason,
+            "source": decision.source,
+            "manual_override_applied": bool(decision.manual_override_applied),
+        }
 
     def feature_job() -> None:
         with engine.begin() as connection:
@@ -269,6 +292,54 @@ def create_app(
             dali=dali_status,
             scheduler=scheduler_status,
         )
+
+    @app.get("/diagnostics/dali")
+    def dali_diagnostics(db: Session = Depends(get_db)) -> dict[str, Any]:
+        mode = (
+            "mock"
+            if isinstance(control_service.dali, MockDALIController)
+            else "hardware"
+        )
+        diagnostics = control_service.dali.diagnostics()
+
+        sensor_probe_supported = False
+        sensor_probe: dict[str, Any] | None = None
+        read_sensor = getattr(control_service.dali, "read_sensor", None)
+        if callable(read_sensor):
+            try:
+                probe = read_sensor()
+                if isinstance(probe, dict):
+                    sensor_probe = probe
+                elif probe is not None:
+                    sensor_probe = {"raw": probe}
+                sensor_probe_supported = True
+            except NotImplementedError:
+                sensor_probe_supported = False
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Failed to probe DALI sensor", extra={"error": str(exc)}
+                )
+        latest_sensor = (
+            db.query(RawSensorEvent)
+            .order_by(RawSensorEvent.timestamp.desc())
+            .first()
+        )
+        latest_decision = (
+            db.query(Decision).order_by(Decision.decided_at.desc()).first()
+        )
+        sensor_event_count = db.query(RawSensorEvent).count()
+        decision_count = db.query(Decision).count()
+
+        return {
+            "mode": mode,
+            "diagnostics": diagnostics,
+            "supports_sensor_probe": sensor_probe_supported,
+            "sensor_probe": sensor_probe,
+            "latest_sensor_event": serialize_sensor_event(latest_sensor),
+            "sensor_event_count": sensor_event_count,
+            "latest_decision": serialize_decision(latest_decision),
+            "decision_count": decision_count,
+        }
 
     @app.post("/admin/aggregate-now", dependencies=[Depends(require_admin_token)])
     def aggregate_now(db: Session = Depends(get_db)):
