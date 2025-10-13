@@ -23,6 +23,8 @@ class ControlService:
         session: Session,
         intensity: int,
         cct: int,
+        *,
+        supports_cct: bool = True,
     ) -> tuple[int, int]:
         latest = (
             session.query(Decision)
@@ -44,7 +46,10 @@ class ControlService:
         if abs(intensity - latest.intensity) > max_delta:
             step = max_delta if intensity > latest.intensity else -max_delta
             intensity = latest.intensity + int(step)
-        if abs(cct - latest.cct) > max_delta * 20:  # allow larger delta for cct scaling
+        if not supports_cct:
+            # Basic DALI mode retains the most recent colour temperature.
+            cct = latest.cct
+        elif abs(cct - latest.cct) > max_delta * 20:  # allow larger delta for cct scaling
             step_cct = (
                 max_delta * 20 if cct > latest.cct else -max_delta * 20
             )
@@ -91,7 +96,18 @@ class ControlService:
             reason = active_override.reason or reason
             override_applied = True
 
-        intensity, cct = self._apply_anti_flicker(session, intensity, cct)
+        supports_cct = bool(getattr(self.dali, "supports_cct", True))
+        if not supports_cct:
+            logger.info(
+                "Basic DALI mode active – retaining previous CCT value",
+                extra={"requested_cct": cct},
+            )
+        intensity, cct = self._apply_anti_flicker(
+            session,
+            intensity,
+            cct,
+            supports_cct=supports_cct,
+        )
         self.dali.send_dt8(intensity, cct)
         energy_saving = max(0.0, (100 - intensity) / 100.0)
         decision = Decision(

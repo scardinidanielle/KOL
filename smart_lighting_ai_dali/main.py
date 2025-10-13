@@ -66,7 +66,7 @@ def create_app(
     dali = (
         MockDALIController(settings=settings)
         if use_mock_dali
-        else TridonicUSBInterface()
+        else TridonicUSBInterface(settings=settings)
     )
     control_service = ControlService(dali=dali, settings=settings)
     ai_controller = AIController(settings=settings, client=None)
